@@ -1,0 +1,29 @@
+{
+  "contract_address": "0x533792A0Ecff229F89178E34A14FAE2B53c115c5",
+  "network": "Studionet (chain id 61999, https://studio.genlayer.com/api)",
+  "deploy_tx": "0x3e7f397272f9309b1c1dc2dc3347d496dbbad6555b124ce7c1ee9e3064e2f321",
+  "deploy_verification": {
+    "status": "FINALIZED",
+    "on_chain_code_identical_to_tested_source": true,
+    "source_sha256": "5754022c07d33d382f2e3686b6319f9eb2a47d0b8709c20a7eed1851c21aede5"
+  },
+  "final_run": {
+    "temp_wallet": "0x281B3d5C549DE22a18aF66e1953FC9103caEEC7b",
+    "tests_passed": "6/6",
+    "write_txs": {
+      "T1_capture_example.com": "0xa8cb433db5af8cb7b2e1499b982d2a47ca3714ab9b8b94b728d6e6d1999eee83",
+      "T4_recapture_example.com": "0xe9f58d5ecbec266e87462f6fd4cfa1defadaf41b9ef2c0cd0c5e57812b5981f2",
+      "T5_capture_404_url": "0xb35f07d5ecb8a510020da872022fefce947416875c33119af6835038002d4665"
+    },
+    "evidence_ids": {
+      "https://example.com": "9 editions (count after final run)",
+      "https://example.com/nonexistent-page-xyz-404": "4 editions (count after final run), status NOT_FOUND"
+    }
+  },
+  "notes": [
+    "example.com serves identical body for 200 and 404 paths, so digest is the same across both evidence records",
+    "leader executions cancelled after validator quorum are recorded as execution_result=ERROR on the leader receipt although the tx is correct and FINALIZED (CONSENSUS_VALIDATOR_QUORUM_REACHED); contract state was always consistent",
+    "divergence flag only fires on OK->OK digest flip; status flips (OK->NOT_FOUND) intentionally do not set it"
+  ],
+  "key_disposal": "temp keys existed only in test-process memory; processes exited; no key material written to disk"
+}

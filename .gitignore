@@ -1,0 +1,39 @@
+# Python
+.venv/
+.venv*/
+venv/
+env/
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# GenLayer
+artifacts/
+.env
+.deployment_info.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Secrets / sensitive (never commit)
+*.env
+.env.*
+secrets*
+*.key
+*.pem
+id_rsa*
+deployment_info.json
