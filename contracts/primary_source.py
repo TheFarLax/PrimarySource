@@ -45,12 +45,10 @@ class PrimarySource(gl.Contract):
 
     # ---------- internals ----------
 
-    @staticmethod
-    def _canonical_id(url: str) -> str:
+    def _canonical_id(self, url: str) -> str:
         return url.strip().lower()
 
-    @staticmethod
-    def _status_class(http_status: int) -> str:
+    def _status_class(self, http_status: int) -> str:
         if 200 <= http_status < 300:
             return 'OK'
         if http_status == 404:
@@ -59,8 +57,7 @@ class PrimarySource(gl.Contract):
             return 'GONE'
         return 'OTHER'
 
-    @staticmethod
-    def _to_bytes(body) -> bytes:
+    def _to_bytes(self, body) -> bytes:
         if isinstance(body, str):
             return body.encode('utf-8')
         return bytes(body)
@@ -126,7 +123,7 @@ class PrimarySource(gl.Contract):
 
         if cap['status'] == 'UNREACHABLE' and had_record:
             # a flaky network must not pollute an existing record
-            raise Exception('capture UNREACHABLE; existing editions untouched')
+            raise gl.vm.UserError('capture UNREACHABLE; existing editions untouched')
 
         prior_editions = len(ev.editions)
         if prior_editions > 0:
@@ -154,9 +151,9 @@ class PrimarySource(gl.Contract):
     def get_edition(self, evidence_id: str, index: int) -> dict:
         ev = self.evidence.get(self._canonical_id(evidence_id))
         if ev is None:
-            raise Exception('no such evidence')
+            raise gl.vm.UserError('no such evidence')
         if index >= len(ev.editions):
-            raise Exception('no such edition')
+            raise gl.vm.UserError('no such edition')
         e = ev.editions[index]
         return {
             'evidence_id': ev.evidence_id,
@@ -174,7 +171,7 @@ class PrimarySource(gl.Contract):
     def get_latest_edition(self, evidence_id: str) -> dict:
         ev = self.evidence.get(self._canonical_id(evidence_id))
         if ev is None or len(ev.editions) == 0:
-            raise Exception('no such evidence')
+            raise gl.vm.UserError('no such evidence')
         return self.get_edition(evidence_id, len(ev.editions) - 1)
 
     @gl.public.view

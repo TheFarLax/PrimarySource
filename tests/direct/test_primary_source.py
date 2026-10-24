@@ -11,6 +11,23 @@ from tests.conftest import sha256_hex
 CONTRACT_PATH = "contracts/primary_source.py"
 
 
+def _expect_user_error(fn, *args, match=None):
+    """Assert a contract call raises a GenVM UserError.
+
+    The contract raises `gl.vm.UserError`; inside direct mode that surfaces as
+    an exception whose class name is ``UserError``. We match by class name so
+    the test does not need the GenVM ``gl`` module at import time.
+    """
+    with pytest.raises(Exception) as exc_info:
+        fn(*args)
+    exc = exc_info.value
+    assert type(exc).__name__ == "UserError", (
+        f"expected UserError (gl.vm.UserError), got {type(exc).__name__}: {exc}"
+    )
+    if match is not None:
+        assert match in str(exc), f"expected '{match}' in {exc!r}"
+
+
 def _mock_page(vm, body, status=200):
     """Mock any URL fetch returning `body` with `status`."""
     vm.mock_web(
@@ -172,17 +189,52 @@ class TestDivergentAsData:
 class TestLookups:
     def test_unknown_evidence_id_raises_on_view(self, direct_deploy):
         contract = direct_deploy(CONTRACT_PATH)
-        with pytest.raises(Exception):
-            contract.get_latest_edition("https://nope.example")
+        _expect_user_error(
+            contract.get_latest_edition, "https://nope.example",
+            match='no such evidence',
+        )
 
     def test_edition_out_of_range(self, direct_vm, direct_deploy):
         _mock_page(direct_vm, "only one")
         contract = direct_deploy(CONTRACT_PATH)
         eid = contract.capture_or_recapture("https://example.org/one")
-        with pytest.raises(Exception):
-            contract.get_edition(eid, 5)
+        _expect_user_error(
+            contract.get_edition, eid, 5,
+            match='no such edition',
+        )
 
     def test_edition_count_zero_for_unknown(self, direct_deploy):
         contract = direct_deploy(CONTRACT_PATH)
         assert contract.edition_count("https://unknown.example") == 0
         assert contract.has_diverged("https://unknown.example") is False
+
+
+class TestErrorPaths:
+    def test_unreachable_capture_of_existing_raises_user_error(self, direct_vm, direct_deploy):
+        """A flaky network must not pollute an existing record -> UserError."""
+        contract = direct_deploy(CONTRACT_PATH)
+
+        _mock_page(direct_vm, "initial body")
+        contract.capture_or_recapture("https://example.org/flaky")
+
+        direct_vm.clear_mocks()
+        # network failure -> capture UNREACHABLE on existing record -> UserError
+        _expect_user_error(
+            contract.capture_or_recapture, "https://example.org/flaky",
+            match='UNREACHABLE',
+        )
+        # existing editions untouched
+        assert contract.edition_count("https://example.org/flaky") == 1
+
+    def test_unreachable_capture_of_new_record_records_unreachable_edition(self, direct_vm, direct_deploy):
+        """First capture of a URL with no web mock records an UNREACHABLE edition."""
+        contract = direct_deploy(CONTRACT_PATH)
+
+        direct_vm.clear_mocks()
+        # no mock -> fetch fails -> leader returns UNREACHABLE dict -> recorded
+        eid = contract.capture_or_recapture("https://example.org/dead")
+
+        assert contract.edition_count(eid) == 1
+        e0 = contract.get_edition(eid, 0)
+        assert e0["status"] == "UNREACHABLE"
+        assert e0["digest"] == ""

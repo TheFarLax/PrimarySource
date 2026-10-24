@@ -29,6 +29,10 @@ Thumbs.db
 *.swp
 *.swo
 
+# Unrelated frontend / node artifacts (out of contract scope)
+app/
+node_modules/
+
 # Secrets / sensitive (never commit)
 *.env
 .env.*
