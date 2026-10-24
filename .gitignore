@@ -18,6 +18,7 @@ htmlcov/
 artifacts/
 .env
 .deployment_info.json
+deployment_info.json
 
 # OS
 .DS_Store

@@ -10,6 +10,7 @@ Security model for the temporary wallet:
 
 Network: Studionet ONLY (https://studio.genlayer.com/api, chain 61999).
 """
+import hashlib
 import json
 import sys
 
@@ -20,6 +21,8 @@ from genlayer_py.types import TransactionStatus
 RPC = "https://studio.genlayer.com/api"
 EXPECTED_CHAIN_ID = 61999
 SOURCE_PATH = "contracts/primary_source.py"
+SOURCE_COMMIT = "3d8e81b"
+FAUCET_AMOUNT_WEI = 10**20  # 100 test GEN (verified to credit properly)
 
 def rpc(client, method, params):
     return client.provider.make_request(method=method, params=params)
@@ -46,13 +49,13 @@ def main():
     print(f"[1] temporary wallet generated: {addr}")
 
     # ---- 2. fund via the official Studionet faucet RPC ----
-    fund = rpc(client, "sim_fundAccount", [addr, 100])  # 100 test GEN
+    fund = rpc(client, "sim_fundAccount", [addr, FAUCET_AMOUNT_WEI])
     if "error" in fund:
         print(f"BLOCKER: faucet error: {fund['error']}")
         return 1
     bal = rpc(client, "eth_getBalance", [addr, "latest"])
     bal_wei = int(bal["result"], 16)
-    print(f"[2] faucet ok (tx {fund['result'][:18]}...), balance = {bal_wei/10**18} test GEN")
+    print(f"[2] faucet ok (tx {str(fund['result'])[:18]}...), balance = {bal_wei/10**18} test GEN")
     if bal_wei <= 0:
         print("BLOCKER: balance is zero after funding")
         return 1
@@ -92,14 +95,24 @@ def main():
         print(json.dumps(receipt, default=str)[:2000])
         return 1
 
-    # ---- 6. verify deployed code exists on-chain ----
+    # ---- 6. verify deployed code is byte-identical to the approved commit ----
+    import base64
     code_resp = rpc(client, "gen_getContractCode", [contract_address])
     if "error" in code_resp:
         print(f"BLOCKER: gen_getContractCode error: {code_resp['error']}")
         return 1
-    deployed_code = code_resp["result"].get("code") if isinstance(code_resp["result"], dict) else code_resp["result"]
-    match = isinstance(deployed_code, str) and ("class PrimarySource" in deployed_code)
-    print(f"[6] deployed code on-chain: {len(str(deployed_code))} chars, contains PrimarySource: {match}")
+    raw = code_resp["result"].get("code") if isinstance(code_resp["result"], dict) else code_resp["result"]
+    try:
+        deployed_code = base64.b64decode(raw)  # gen_getContractCode returns base64
+    except Exception:
+        deployed_code = str(raw).encode("utf-8")  # fallback: already text
+    local_bytes = code.encode("utf-8")
+    local_sha = hashlib.sha256(local_bytes).hexdigest()
+    chain_sha = hashlib.sha256(deployed_code).hexdigest()
+    match = (chain_sha == local_sha)
+    print(f"[6] local  sha256: {local_sha}")
+    print(f"[6] onchain sha256: {chain_sha}")
+    print(f"[6] byte-identical to commit {SOURCE_COMMIT}: {match}")
 
     # ---- 7. post-deploy reads (state must be empty/zero) ----
     n = client_local.read_contract(address=contract_address, function_name="edition_count", args=["https://example.com"])
@@ -111,8 +124,10 @@ def main():
         "contract_address": contract_address,
         "deploy_tx": tx_hash,
         "deploy_status": status,
-        "deployed_code_contains_PrimarySource": match,
-        "source_sha256": "5754022c07d33d382f2e3686b6319f9eb2a47d0b8709c20a7eed1851c21aede5",
+        "source_commit": SOURCE_COMMIT,
+        "byte_identical_to_commit": match,
+        "source_sha256": local_sha,
+        "deployed_code_sha256": chain_sha,
     }
     with open("deployment_info.json", "w") as f:
         json.dump(info, f, indent=2)

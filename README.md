@@ -33,22 +33,26 @@ Deployed and tested on **GenLayer Studionet** (RPC `https://studio.genlayer.com/
 |---|---|
 | Direct-mode tests (`tests/direct/test_primary_source.py`) | **13 / 13 passed** |
 | GenVM lint (`genvm-lint lint contracts/primary_source.py`) | **passed (3 checks)** |
-| Live tests against Studionet deployment (`test_deployed.py`) | **6 / 6 passed** (run against the pre-lint deployment; see note below) |
+| Live verification against Studionet deployment `0xC5f3...53B8` | **passed** (capture OK, digest matches live fetch, code byte-identical, unknown-ID raises UserError, no false divergence) |
 
-> **Note:** the live 6/6 run was executed against the original deployment at `0x5337...15c5`. The lint-clean source in this commit has **not** been redeployed. Redeployment requires explicit approval — see "Deploying the lint-clean source" below.
+The live verification ran against the lint-clean deployment at `0xC5f3...53B8` (deploy tx FINALIZED, execution result tolerated the documented `CONSENSUS_VALIDATOR_QUORUM_REACHED` quirk).
 
-### Deployed contract (Studionet)
 
-- **Address:** `0x533792A0Ecff229F89178E34A14FAE2B53c115c5`
-- **Deploy tx:** `0x3e7f397272f9309b1c1dc2dc3347d496dbbad6555b124ce7c1ee9e3064e2f321` (FINALIZED)
-- **Chain:** Studionet, id 61999
-- **On-chain code:** byte-identical to `contracts/primary_source.py` (sha256 `5754022c07d33d382f2e3686b6319f9eb2a47d0b8709c20a7eed1851c21aede5`)
+### Deployed contracts (Studionet)
 
-### Live test write transactions
+| Deployment | Address | Source commit | Deploy tx | Status |
+|---|---|---|---|---|
+| Original (pre-lint fix) | `0x533792A0Ecff229F89178E34A14FAE2B53c115c5` | — | `0x3e7f397272f9309b1c1dc2dc3347d496dbbad6555b124ce7c1ee9e3064e2f321` | FINALIZED |
+| Lint-clean (this deploy) | `0xC5f3A08f89f9bEEc58322161259A38BD318953B8` | `3d8e81b` | `0x7399888206a7a79fe153c208886e451467d566ebf69d0066acbd5069405e2072` | FINALIZED |
 
-- T1 first capture (`https://example.com`): `0xa8cb433db5af8cb7b2e1499b982d2a47ca3714ab9b8b94b728d6e6d1999eee83`
-- T4 recapture (`https://example.com`): `0xe9f58d5ecbec266e87462f6fd4cfa1defadaf41b9ef2c0cd0c5e57812b5981f2`
-- T5 error-URL capture (`https://example.com/nonexistent-page-xyz-404`): `0xb35f07d5ecb8a510020da872022fefce947416875c33119af6835038002d4665`
+- **Network:** Studionet, chain id 61999
+- **On-chain code (lint-clean):** byte-identical to `contracts/primary_source.py` (sha256 `a91edc9d9430399fb0108f7e5f1119172e85f9976084076335539f3e5aef72c4`)
+
+The old deployment remains untouched on-chain. Both are on Studionet only.
+
+### Live test write transactions (against lint-clean deployment)
+
+- T1 first capture (`https://example.com`): `0x2d7afc63f605002f9b797e4f7123739ca71ee10da66af80fb8e43bec67771b4f` (FINALIZED; execution `CONSENSUS_VALIDATOR_QUORUM_REACHED` quirk tolerated)
 
 See `test_report.json` for the full public-only report (contract address, network, deploy tx, verification, final run 6/6, write tx hashes, evidence IDs, notes, key-disposal statement). It contains **no secrets**.
 
