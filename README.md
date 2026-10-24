@@ -31,8 +31,11 @@ Deployed and tested on **GenLayer Studionet** (RPC `https://studio.genlayer.com/
 
 | Suite | Result |
 |---|---|
-| Direct-mode tests (`tests/direct/test_primary_source.py`) | **11 / 11 passed** |
-| Live tests against Studionet deployment (`test_deployed.py`) | **6 / 6 passed** |
+| Direct-mode tests (`tests/direct/test_primary_source.py`) | **13 / 13 passed** |
+| GenVM lint (`genvm-lint lint contracts/primary_source.py`) | **passed (3 checks)** |
+| Live tests against Studionet deployment (`test_deployed.py`) | **6 / 6 passed** (run against the pre-lint deployment; see note below) |
+
+> **Note:** the live 6/6 run was executed against the original deployment at `0x5337...15c5`. The lint-clean source in this commit has **not** been redeployed. Redeployment requires explicit approval — see "Deploying the lint-clean source" below.
 
 ### Deployed contract (Studionet)
 
