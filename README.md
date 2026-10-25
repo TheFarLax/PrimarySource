@@ -13,6 +13,19 @@ A GenLayer Intelligent Contract (MVP) that captures web page evidence as immutab
 
 Each URL maps to one evidence record with a `DynArray` of editions. Editions are **immutable**: recapturing appends a new edition; earlier editions are never mutated. Divergence history persists even if the page later reverts to its original content — it is evidence, not noise.
 
+Every edition records the **exact URL fetched**, so an edition can never be attributed to a different resource than the one retrieved.
+
+### URL identity (RFC 3986)
+
+| Component | Treatment | Example |
+|---|---|---|
+| Scheme | lowercased | `HTTPS://` → `https://` |
+| Host | lowercased | `Example.COM` → `example.com` |
+| Default port | removed | `:443` (https) / `:80` (http) |
+| **Path** | **preserved (case-sensitive)** | `/Path` ≠ `/path` |
+| **Query** | **preserved (case-sensitive)** | `?item=ABC` ≠ `?item=abc` |
+| Fragment | dropped (never sent to server) | `/page#s` → `/page` |
+
 ## Network
 
 Deployed and tested on **GenLayer Studionet** (RPC `https://studio.genlayer.com/api`, chain id `61999`). Only Studionet is used — never mainnet, never real funds.
@@ -31,7 +44,7 @@ Deployed and tested on **GenLayer Studionet** (RPC `https://studio.genlayer.com/
 
 | Suite | Result |
 |---|---|
-| Direct-mode tests (`tests/direct/test_primary_source.py`) | **13 / 13 passed** |
+| Direct-mode tests (`tests/direct/test_primary_source.py`) | **19 / 19 passed** |
 | GenVM lint (`genvm-lint lint contracts/primary_source.py`) | **passed (3 checks)** |
 | Live verification against Studionet deployment `0xC5f3...53B8` | **passed** (capture OK, digest matches live fetch, code byte-identical, unknown-ID raises UserError, no false divergence) |
 
@@ -88,7 +101,7 @@ source .venv/bin/activate
 python -m pytest tests/direct/ -v
 ```
 
-Result: **11 / 11 passed**.
+Result: **19 / 19 passed**.
 
 ### Live tests against Studionet deployment
 
