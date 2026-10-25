@@ -46,7 +46,42 @@ class PrimarySource(gl.Contract):
     # ---------- internals ----------
 
     def _canonical_id(self, url: str) -> str:
-        return url.strip().lower()
+        """Standards-correct URL canonicalization (RFC 3986).
+
+        Normalizes only case-insensitive components (scheme, host, default
+        port) and drops the fragment. Path and query are preserved exactly as
+        supplied, since they are case-sensitive and identify distinct resources.
+        """
+        url = url.strip()
+        if '://' in url:
+            scheme, rest = url.split('://', 1)
+            scheme = scheme.lower()
+        else:
+            scheme, rest = 'https', url
+
+        # Split authority from path (path includes query if present).
+        slash_idx = rest.find('/')
+        if slash_idx == -1:
+            authority, path = rest, ''
+        else:
+            authority, path = rest[:slash_idx], rest[slash_idx:]
+
+        # Host is case-insensitive; strip default ports.
+        if ':' in authority:
+            host, port = authority.rsplit(':', 1)
+            host = host.lower()
+            if (scheme == 'https' and port == '443') or (scheme == 'http' and port == '80'):
+                authority = host
+            else:
+                authority = f'{host}:{port}'
+        else:
+            authority = authority.lower()
+
+        canonical = f'{scheme}://{authority}{path}'
+        # Fragment is never sent to the server; drop it for identity.
+        if '#' in canonical:
+            canonical = canonical.split('#', 1)[0]
+        return canonical
 
     def _status_class(self, http_status: int) -> str:
         if 200 <= http_status < 300:
@@ -80,11 +115,12 @@ class PrimarySource(gl.Contract):
                 status = int(web.status)
                 body_len = len(body)
             except Exception:
-                return json.dumps(_err('UNREACHABLE'))
+                return json.dumps(_err('UNREACHABLE', url))
             return json.dumps({
                 'digest': digest,
                 'status': self._status_class(status),
                 'body_len': body_len,
+                'url': url,          # exact resource fetched
             })
 
         def validator_fetch(leader_res) -> bool:
@@ -136,7 +172,7 @@ class PrimarySource(gl.Contract):
 
         ev.editions.append(Edition(
             digest=cap['digest'],
-            url=ev.url,
+            url=cap.get('url', ev.url),
             status=cap['status'],
             captured_at=datetime.datetime.now().isoformat(),
             captured_by=gl.message.sender_address.as_hex,
@@ -193,5 +229,5 @@ class PrimarySource(gl.Contract):
         return False
 
 
-def _err(status: str) -> dict:
-    return {'digest': '', 'status': status, 'body_len': 0}
+def _err(status: str, url: str = '') -> dict:
+    return {'digest': '', 'status': status, 'body_len': 0, 'url': url}

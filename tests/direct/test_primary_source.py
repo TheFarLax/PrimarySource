@@ -4,6 +4,7 @@ Run with: pytest tests/direct/ -v
 Requires: pip install genlayer-test
 """
 import json
+import re
 import pytest
 
 from tests.conftest import sha256_hex
@@ -65,14 +66,22 @@ class TestCapture:
         latest = contract.get_latest_edition(eid)
         assert latest["digest"] == sha256_hex(body)
 
-    def test_canonical_id_lowercases(self, direct_vm, direct_deploy):
+    def test_canonical_id_preserves_path_case(self, direct_vm, direct_deploy):
+        """Scheme and host are normalized; path case is preserved (RFC 3986).
+
+        https://example.org/Page and https://example.org/page are distinct
+        resources and must not be merged into one evidence record.
+        """
         _mock_page(direct_vm, "abc")
         contract = direct_deploy(CONTRACT_PATH)
 
         eid1 = contract.capture_or_recapture("https://EXAMPLE.org/Page")
         eid2 = contract.capture_or_recapture("https://example.org/page")
-        assert eid1 == eid2
-        assert contract.edition_count(eid1) == 2
+        assert eid1 == "https://example.org/Page"
+        assert eid2 == "https://example.org/page"
+        assert eid1 != eid2
+        assert contract.edition_count(eid1) == 1
+        assert contract.edition_count(eid2) == 1
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -238,3 +247,130 @@ class TestErrorPaths:
         e0 = contract.get_edition(eid, 0)
         assert e0["status"] == "UNREACHABLE"
         assert e0["digest"] == ""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# URL identity / canonicalization (RFC 3986)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _mock_url(vm, url, body, status=200):
+    """Mock one specific URL returning `body` with `status`."""
+    vm.mock_web(re.escape(url), {"status": status, "body": body})
+
+
+class TestUrlIdentity:
+    def test_path_case_remains_distinct(self, direct_vm, direct_deploy):
+        """Path is case-sensitive: /Path and /path are different resources."""
+        contract = direct_deploy(CONTRACT_PATH)
+
+        _mock_url(direct_vm, "https://example.com/Path", "uppercase path")
+        _mock_url(direct_vm, "https://example.com/path", "lowercase path")
+
+        eid_upper = contract.capture_or_recapture("https://example.com/Path")
+        eid_lower = contract.capture_or_recapture("https://example.com/path")
+
+        assert eid_upper == "https://example.com/Path"
+        assert eid_lower == "https://example.com/path"
+        assert eid_upper != eid_lower
+        assert contract.edition_count(eid_upper) == 1
+        assert contract.edition_count(eid_lower) == 1
+
+        e_upper = contract.get_edition(eid_upper, 0)
+        e_lower = contract.get_edition(eid_lower, 0)
+        assert e_upper["digest"] == sha256_hex("uppercase path")
+        assert e_lower["digest"] == sha256_hex("lowercase path")
+        assert e_upper["url"] == "https://example.com/Path"
+        assert e_lower["url"] == "https://example.com/path"
+
+    def test_query_case_remains_distinct(self, direct_vm, direct_deploy):
+        """Query is case-sensitive: ?item=ABC and ?item=abc are different resources."""
+        contract = direct_deploy(CONTRACT_PATH)
+
+        _mock_url(direct_vm, "https://example.com/?item=ABC", "ABC item")
+        _mock_url(direct_vm, "https://example.com/?item=abc", "abc item")
+
+        eid_upper = contract.capture_or_recapture("https://example.com/?item=ABC")
+        eid_lower = contract.capture_or_recapture("https://example.com/?item=abc")
+
+        assert eid_upper == "https://example.com/?item=ABC"
+        assert eid_lower == "https://example.com/?item=abc"
+        assert eid_upper != eid_lower
+        assert contract.edition_count(eid_upper) == 1
+        assert contract.edition_count(eid_lower) == 1
+
+        e_upper = contract.get_edition(eid_upper, 0)
+        e_lower = contract.get_edition(eid_lower, 0)
+        assert e_upper["digest"] == sha256_hex("ABC item")
+        assert e_lower["digest"] == sha256_hex("abc item")
+        assert e_upper["url"] == "https://example.com/?item=ABC"
+        assert e_lower["url"] == "https://example.com/?item=abc"
+
+    def test_host_and_scheme_are_normalized(self, direct_vm, direct_deploy):
+        """Host and scheme are case-insensitive: different casings merge."""
+        contract = direct_deploy(CONTRACT_PATH)
+
+        _mock_url(direct_vm, "https://example.com/resource", "same body")
+
+        eid1 = contract.capture_or_recapture("HTTPS://Example.COM/resource")
+        eid2 = contract.capture_or_recapture("https://example.com/resource")
+
+        assert eid1 == eid2 == "https://example.com/resource"
+        assert contract.edition_count(eid1) == 2
+
+    def test_fragment_is_dropped_from_identity(self, direct_vm, direct_deploy):
+        """Fragment is never sent to the server; it must not affect identity."""
+        contract = direct_deploy(CONTRACT_PATH)
+
+        _mock_url(direct_vm, "https://example.com/page", "body")
+
+        eid1 = contract.capture_or_recapture("https://example.com/page#section")
+        eid2 = contract.capture_or_recapture("https://example.com/page")
+
+        assert eid1 == eid2 == "https://example.com/page"
+        assert contract.edition_count(eid1) == 2
+
+    def test_recorded_url_matches_fetched_url(self, direct_vm, direct_deploy):
+        """Every edition records the exact resource fetched (not a normalized copy)."""
+        contract = direct_deploy(CONTRACT_PATH)
+
+        _mock_url(direct_vm, "https://example.com/Path", "path body")
+
+        eid = contract.capture_or_recapture("https://example.com/Path")
+        e0 = contract.get_edition(eid, 0)
+
+        assert e0["url"] == "https://example.com/Path"
+        assert e0["digest"] == sha256_hex("path body")
+
+    def test_recapturing_one_url_never_merges_another(self, direct_vm, direct_deploy):
+        """Recapturing URL A must not modify or merge into URL B's editions."""
+        contract = direct_deploy(CONTRACT_PATH)
+
+        _mock_url(direct_vm, "https://example.com/A", "A body")
+        _mock_url(direct_vm, "https://example.com/B", "B body")
+
+        eid_a = contract.capture_or_recapture("https://example.com/A")
+        eid_b = contract.capture_or_recapture("https://example.com/B")
+
+        # recapture A again
+        direct_vm.clear_mocks()
+        _mock_url(direct_vm, "https://example.com/A", "A body v2")
+        contract.capture_or_recapture("https://example.com/A")
+
+        # A now has 2 editions, B still has 1 — never merged
+        assert contract.edition_count(eid_a) == 2
+        assert contract.edition_count(eid_b) == 1
+
+        b0 = contract.get_edition(eid_b, 0)
+        assert b0["digest"] == sha256_hex("B body")
+        assert b0["url"] == "https://example.com/B"
+        assert b0["divergent"] is False
+
+        # A's second edition reflects its own new body
+        a1 = contract.get_edition(eid_a, 1)
+        assert a1["digest"] == sha256_hex("A body v2")
+        assert a1["url"] == "https://example.com/A"
+        assert a1["divergent"] is False
+        # the previous edition (index 0) is flagged divergent on the OK->OK flip
+        a0 = contract.get_edition(eid_a, 0)
+        assert a0["digest"] == sha256_hex("A body")
+        assert a0["divergent"] is True
