@@ -56,12 +56,13 @@ The live verification ran against the lint-clean deployment at `0xC5f3...53B8` (
 | Deployment | Address | Source commit | Deploy tx | Status |
 |---|---|---|---|---|
 | Original (pre-lint fix) | `0x533792A0Ecff229F89178E34A14FAE2B53c115c5` | — | `0x3e7f397272f9309b1c1dc2dc3347d496dbbad6555b124ce7c1ee9e3064e2f321` | FINALIZED |
-| Lint-clean (this deploy) | `0xC5f3A08f89f9bEEc58322161259A38BD318953B8` | `3d8e81b` | `0x7399888206a7a79fe153c208886e451467d566ebf69d0066acbd5069405e2072` | FINALIZED |
+| Lint-clean | `0xC5f3A08f89f9bEEc58322161259A38BD318953B8` | `3d8e81b` | `0x7399888206a7a79fe153c208886e451467d566ebf69d0066acbd5069405e2072` | FINALIZED |
+| **URL-identity fix (current)** | `0xD033c74019FD4f92e6536577C424d5736f6043bf` | `7d6ee9d` | `0xc04125634a22d5e5edaacafdf066902b1669400f7011e083b2ea524b9661c5fb` | FINALIZED |
 
 - **Network:** Studionet, chain id 61999
-- **On-chain code (lint-clean):** byte-identical to `contracts/primary_source.py` (sha256 `a91edc9d9430399fb0108f7e5f1119172e85f9976084076335539f3e5aef72c4`)
+- **Current on-chain code:** byte-identical to `contracts/primary_source.py` at commit `7d6ee9d` (sha256 `934164d6d46de98cf981669bf7b898d35662a773bccbd6e3bc6b13d2b39a805c`)
 
-The old deployment remains untouched on-chain. Both are on Studionet only.
+All earlier deployments remain untouched on-chain. Everything is on Studionet only.
 
 ### Live test write transactions (against lint-clean deployment)
 

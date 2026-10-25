@@ -21,7 +21,7 @@ from genlayer_py.types import TransactionStatus
 RPC = "https://studio.genlayer.com/api"
 EXPECTED_CHAIN_ID = 61999
 SOURCE_PATH = "contracts/primary_source.py"
-SOURCE_COMMIT = "3d8e81b"
+SOURCE_COMMIT = "7d6ee9d"
 FAUCET_AMOUNT_WEI = 10**20  # 100 test GEN (verified to credit properly)
 
 def rpc(client, method, params):
