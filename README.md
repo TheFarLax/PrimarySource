@@ -44,11 +44,11 @@ Deployed and tested on **GenLayer Studionet** (RPC `https://studio.genlayer.com/
 
 | Suite | Result |
 |---|---|
-| Direct-mode tests (`tests/direct/test_primary_source.py`) | **19 / 19 passed** |
+| Direct-mode tests (`tests/direct/test_primary_source.py`) | **24 / 24 passed** |
 | GenVM lint (`genvm-lint lint contracts/primary_source.py`) | **passed (3 checks)** |
-| Live verification against Studionet deployment `0xC5f3...53B8` | **passed** (capture OK, digest matches live fetch, code byte-identical, unknown-ID raises UserError, no false divergence) |
+| Live verification against Studionet deployment `0xFa3C...66Ab8` | **passed** (query-no-slash case distinctness, path-case distinctness, per-edition URL recording, recapture isolation, scheme/host normalization, code byte-identical) |
 
-The live verification ran against the lint-clean deployment at `0xC5f3...53B8` (deploy tx FINALIZED, execution result tolerated the documented `CONSENSUS_VALIDATOR_QUORUM_REACHED` quirk).
+The current live deployment is `0xFa3C79Ff45b4049ce0a16b180bD65Fa68CE66Ab8` (commit `c537832`, deploy tx FINALIZED).
 
 
 ### Deployed contracts (Studionet)
@@ -57,16 +57,21 @@ The live verification ran against the lint-clean deployment at `0xC5f3...53B8` (
 |---|---|---|---|---|
 | Original (pre-lint fix) | `0x533792A0Ecff229F89178E34A14FAE2B53c115c5` | — | `0x3e7f397272f9309b1c1dc2dc3347d496dbbad6555b124ce7c1ee9e3064e2f321` | FINALIZED |
 | Lint-clean | `0xC5f3A08f89f9bEEc58322161259A38BD318953B8` | `3d8e81b` | `0x7399888206a7a79fe153c208886e451467d566ebf69d0066acbd5069405e2072` | FINALIZED |
-| **URL-identity fix (current)** | `0xD033c74019FD4f92e6536577C424d5736f6043bf` | `7d6ee9d` | `0xc04125634a22d5e5edaacafdf066902b1669400f7011e083b2ea524b9661c5fb` | FINALIZED |
+| URL-identity fix | `0xD033c74019FD4f92e6536577C424d5736f6043bf` | `7d6ee9d` | `0xc04125634a22d5e5edaacafdf066902b1669400f7011e083b2ea524b9661c5fb` | FINALIZED |
+| **URL-identity fix 2 (current)** | `0xFa3C79Ff45b4049ce0a16b180bD65Fa68CE66Ab8` | `c537832` | `0xa18959f6dd607b21abb9ac46f6115c72c05163cd92d6a336a352cfa1f17a97d5` | FINALIZED |
 
 - **Network:** Studionet, chain id 61999
-- **Current on-chain code:** byte-identical to `contracts/primary_source.py` at commit `7d6ee9d` (sha256 `934164d6d46de98cf981669bf7b898d35662a773bccbd6e3bc6b13d2b39a805c`)
+- **Current on-chain code:** byte-identical to `contracts/primary_source.py` at commit `c537832` (sha256 `8cf38393ca90ffdcb6122e35c4cbf8ae6ecc1cc1df1ece3a5ea67adb41a907f0`)
 
 All earlier deployments remain untouched on-chain. Everything is on Studionet only.
 
-### Live test write transactions (against lint-clean deployment)
+### Live test write transactions (against commit `c537832` deployment)
 
-- T1 first capture (`https://example.com`): `0x2d7afc63f605002f9b797e4f7123739ca71ee10da66af80fb8e43bec67771b4f` (FINALIZED; execution `CONSENSUS_VALIDATOR_QUORUM_REACHED` quirk tolerated)
+- T1 query-no-slash (`https://example.com?q=CASE_XYZ`): FINALIZED exec=SUCCESS
+- T2 no-slash query case distinct (`?q=case_xyz`): FINALIZED exec=SUCCESS, distinct evidence id
+- T3 path case (`/FreshPathABC` vs `/freshpathabc`): FINALIZED exec=SUCCESS, distinct evidence ids
+- T4 per-edition URL (`/PerEditionAAA` / `HTTPS://EXAMPLE.COM/PerEditionAAA`): each edition returns its own fetched URL
+- T5 recapture isolation (`/MergeTestUpper` vs `/mergetestupper`): never merged
 
 See `test_report.json` for the full public-only report (contract address, network, deploy tx, verification, final run 6/6, write tx hashes, evidence IDs, notes, key-disposal statement). It contains **no secrets**.
 
