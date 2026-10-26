@@ -374,3 +374,108 @@ class TestUrlIdentity:
         a0 = contract.get_edition(eid_a, 0)
         assert a0["digest"] == sha256_hex("A body")
         assert a0["divergent"] is True
+
+    # ── queries with no explicit path (reviewer regression) ──────────────
+
+    def test_query_without_slash_case_remains_distinct(self, direct_vm, direct_deploy):
+        """https://host?item=ABC vs ?item=abc — no slash, query is case-sensitive."""
+        contract = direct_deploy(CONTRACT_PATH)
+
+        _mock_url(direct_vm, "https://example.com?item=ABC", "ABC no-slash")
+        _mock_url(direct_vm, "https://example.com?item=abc", "abc no-slash")
+
+        eid_upper = contract.capture_or_recapture("https://example.com?item=ABC")
+        eid_lower = contract.capture_or_recapture("https://example.com?item=abc")
+
+        assert eid_upper == "https://example.com?item=ABC"
+        assert eid_lower == "https://example.com?item=abc"
+        assert eid_upper != eid_lower
+        assert contract.edition_count(eid_upper) == 1
+        assert contract.edition_count(eid_lower) == 1
+
+        e_u = contract.get_edition(eid_upper, 0)
+        e_l = contract.get_edition(eid_lower, 0)
+        assert e_u["url"] == "https://example.com?item=ABC"
+        assert e_l["url"] == "https://example.com?item=abc"
+        assert e_u["digest"] == sha256_hex("ABC no-slash")
+        assert e_l["digest"] == sha256_hex("abc no-slash")
+
+    def test_query_case_distinct_with_and_without_slash(self, direct_vm, direct_deploy):
+        """Case-sensitive queries stay distinct in both URL forms."""
+        contract = direct_deploy(CONTRACT_PATH)
+        _mock_page(direct_vm, "body")
+
+        ids = [
+            "https://example.com/?item=ABC",
+            "https://example.com/?item=abc",
+            "https://example.com?item=ABC",
+            "https://example.com?item=abc",
+        ]
+        eids = [contract.capture_or_recapture(u) for u in ids]
+
+        # every spelling maps to a distinct evidence id
+        assert len(set(eids)) == 4, eids
+        for eid, u in zip(eids, ids):
+            assert eid == u
+            assert contract.edition_count(eid) == 1
+
+    def test_no_path_no_query_normalizes_host(self, direct_vm, direct_deploy):
+        """Bare host with no path/query still normalizes scheme+host case."""
+        contract = direct_deploy(CONTRACT_PATH)
+        _mock_page(direct_vm, "root")
+
+        eid1 = contract.capture_or_recapture("HTTPS://Example.COM")
+        eid2 = contract.capture_or_recapture("https://example.com")
+        assert eid1 == eid2 == "https://example.com"
+        assert contract.edition_count(eid1) == 2
+
+    # ── edition URL must be the edition's own fetched URL ────────────────
+
+    def test_each_edition_returns_its_own_fetched_url(self, direct_vm, direct_deploy):
+        """get_edition returns that edition's URL, not the record's first URL."""
+        contract = direct_deploy(CONTRACT_PATH)
+
+        first = "https://example.com/Article"
+        second = "HTTPS://EXAMPLE.COM/Article"   # same canonical id, different spelling
+
+        _mock_url(direct_vm, first, "v1")
+        eid = contract.capture_or_recapture(first)
+
+        direct_vm.clear_mocks()
+        _mock_url(direct_vm, second, "v2")
+        contract.capture_or_recapture(second)
+
+        assert contract.edition_count(eid) == 2
+
+        e0 = contract.get_edition(eid, 0)
+        e1 = contract.get_edition(eid, 1)
+        # each edition exposes the exact spelling fetched at that time
+        assert e0["url"] == first
+        assert e1["url"] == second
+        assert e0["digest"] == sha256_hex("v1")
+        assert e1["digest"] == sha256_hex("v2")
+
+        latest = contract.get_latest_edition(eid)
+        assert latest["url"] == second
+
+    def test_distinct_case_urls_never_overwrite(self, direct_vm, direct_deploy):
+        """Recapturing with different case never merges/overwrites another resource."""
+        contract = direct_deploy(CONTRACT_PATH)
+
+        _mock_url(direct_vm, "https://example.com/Path", "upper")
+        _mock_url(direct_vm, "https://example.com/path", "lower")
+
+        eid_u = contract.capture_or_recapture("https://example.com/Path")
+        eid_l = contract.capture_or_recapture("https://example.com/path")
+
+        # recapture the lower-case one several times
+        contract.capture_or_recapture("https://example.com/path")
+        contract.capture_or_recapture("https://example.com/path")
+
+        assert contract.edition_count(eid_u) == 1
+        assert contract.edition_count(eid_l) == 3
+        # upper record is untouched by lower recaptures
+        u0 = contract.get_edition(eid_u, 0)
+        assert u0["url"] == "https://example.com/Path"
+        assert u0["digest"] == sha256_hex("upper")
+        assert u0["divergent"] is False

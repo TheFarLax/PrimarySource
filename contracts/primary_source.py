@@ -51,6 +51,7 @@ class PrimarySource(gl.Contract):
         Normalizes only case-insensitive components (scheme, host, default
         port) and drops the fragment. Path and query are preserved exactly as
         supplied, since they are case-sensitive and identify distinct resources.
+        Handles URLs with no explicit path, with or without a query.
         """
         url = url.strip()
         if '://' in url:
@@ -59,12 +60,14 @@ class PrimarySource(gl.Contract):
         else:
             scheme, rest = 'https', url
 
-        # Split authority from path (path includes query if present).
-        slash_idx = rest.find('/')
-        if slash_idx == -1:
-            authority, path = rest, ''
-        else:
-            authority, path = rest[:slash_idx], rest[slash_idx:]
+        # Authority ends at the first '/', '?', or '#'. Path+query preserves
+        # case, including query strings with no explicit path.
+        split_idx = len(rest)
+        for delim in ('/', '?', '#'):
+            idx = rest.find(delim)
+            if idx != -1 and idx < split_idx:
+                split_idx = idx
+        authority, path_and_query = rest[:split_idx], rest[split_idx:]
 
         # Host is case-insensitive; strip default ports.
         if ':' in authority:
@@ -77,7 +80,7 @@ class PrimarySource(gl.Contract):
         else:
             authority = authority.lower()
 
-        canonical = f'{scheme}://{authority}{path}'
+        canonical = f'{scheme}://{authority}{path_and_query}'
         # Fragment is never sent to the server; drop it for identity.
         if '#' in canonical:
             canonical = canonical.split('#', 1)[0]
@@ -193,7 +196,7 @@ class PrimarySource(gl.Contract):
         e = ev.editions[index]
         return {
             'evidence_id': ev.evidence_id,
-            'url': ev.url,
+            'url': e.url,           # exact resource fetched for this edition
             'edition': index,
             'digest': e.digest,
             'status': e.status,
