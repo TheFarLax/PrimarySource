@@ -22,9 +22,13 @@ class Edition:
 @allow_storage
 @dataclass
 class Evidence:
-    evidence_id: str       # canonical id (lowercased URL)
+    evidence_id: str       # canonical id (scheme/host normalized)
     url: str               # original URL as first supplied
     editions: DynArray[Edition]
+
+
+EMPTY_DIGEST = ''
+VALID_STATUSES = ('OK', 'NOT_FOUND', 'GONE', 'OTHER', 'UNREACHABLE')
 
 
 class PrimarySource(gl.Contract):
@@ -100,6 +104,43 @@ class PrimarySource(gl.Contract):
             return body.encode('utf-8')
         return bytes(body)
 
+    def _validate_capture(self, requested_url: str, capture: dict) -> bool:
+        """Require every capture response to remain bound to its request."""
+        if not isinstance(capture, dict):
+            raise gl.vm.UserError('malformed capture response')
+        if capture.get('url') != requested_url:
+            raise gl.vm.UserError('capture URL does not match request')
+        status = capture.get('status')
+        digest = capture.get('digest')
+        if status not in VALID_STATUSES:
+            raise gl.vm.UserError('malformed capture status')
+        if status == 'UNREACHABLE':
+            if digest != EMPTY_DIGEST or capture.get('body_len') != 0:
+                raise gl.vm.UserError('UNREACHABLE sentinel is invalid')
+        elif not isinstance(digest, str) or digest == EMPTY_DIGEST:
+            raise gl.vm.UserError('reachable capture digest must be non-empty')
+        return True
+
+    def _validate_edition(self, edition) -> bool:
+        """Check one persisted edition's URL/status/digest invariant."""
+        if not isinstance(edition.url, str) or edition.url == '':
+            raise gl.vm.UserError('stored capture URL is invalid')
+        if edition.status == 'UNREACHABLE':
+            if edition.digest != EMPTY_DIGEST or edition.body_len != 0:
+                raise gl.vm.UserError('stored UNREACHABLE sentinel is invalid')
+        elif edition.status in ('OK', 'NOT_FOUND', 'GONE', 'OTHER'):
+            if not isinstance(edition.digest, str) or edition.digest == EMPTY_DIGEST:
+                raise gl.vm.UserError('stored reachable digest is invalid')
+        else:
+            raise gl.vm.UserError('stored capture status is invalid')
+        return True
+
+    def _validate_editions(self, editions) -> bool:
+        """Check all persisted editions before extending their history."""
+        for edition in editions:
+            self._validate_edition(edition)
+        return True
+
     # ---------- consensus: the capture itself ----------
 
     @gl.public.write
@@ -129,15 +170,12 @@ class PrimarySource(gl.Contract):
         def validator_fetch(leader_res) -> bool:
             if not isinstance(leader_res, gl.vm.Return):
                 return False
-            leader_data = json.loads(leader_res.calldata)
             try:
+                leader_data = json.loads(leader_res.calldata)
+                self._validate_capture(url, leader_data)
                 mine = json.loads(leader_fetch())
+                self._validate_capture(url, mine)
             except Exception:
-                return False
-            if leader_data.get('status') == 'UNREACHABLE':
-                # agree only if the validator independently could not fetch
-                return mine.get('status') == 'UNREACHABLE'
-            if mine.get('status') == 'UNREACHABLE':
                 return False
             # Objective tuple only: identical digest + same status class.
             # Body length is informational, not consensus-critical.
@@ -148,6 +186,7 @@ class PrimarySource(gl.Contract):
 
         raw = gl.vm.run_nondet_unsafe(leader_fetch, validator_fetch)
         cap = json.loads(raw)
+        self._validate_capture(url, cap)
 
         had_record = eid in self.evidence
         if not had_record:
@@ -159,6 +198,7 @@ class PrimarySource(gl.Contract):
         # always operate on the storage view, never on the plain object
         # (docs' storage gotcha: assignment stores a copy)
         ev = self.evidence[eid]
+        self._validate_editions(ev.editions)
 
         if cap['status'] == 'UNREACHABLE' and had_record:
             # a flaky network must not pollute an existing record
@@ -175,13 +215,14 @@ class PrimarySource(gl.Contract):
 
         ev.editions.append(Edition(
             digest=cap['digest'],
-            url=cap.get('url', ev.url),
+            url=url,                  # bound directly to the capture request
             status=cap['status'],
             captured_at=datetime.datetime.now().isoformat(),
             captured_by=gl.message.sender_address.as_hex,
             body_len=cap.get('body_len', 0),
             divergent=False,
         ))
+        self._validate_edition(ev.editions[len(ev.editions) - 1])
         return eid
 
     # ---------- views ----------
@@ -194,6 +235,7 @@ class PrimarySource(gl.Contract):
         if index >= len(ev.editions):
             raise gl.vm.UserError('no such edition')
         e = ev.editions[index]
+        self._validate_edition(e)
         return {
             'evidence_id': ev.evidence_id,
             'url': e.url,           # exact resource fetched for this edition

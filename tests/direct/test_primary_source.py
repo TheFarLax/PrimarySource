@@ -247,6 +247,113 @@ class TestErrorPaths:
         e0 = contract.get_edition(eid, 0)
         assert e0["status"] == "UNREACHABLE"
         assert e0["digest"] == ""
+        assert e0["url"] == "https://example.org/dead"
+
+    def test_validator_rejects_leader_url_mismatch(self, direct_vm, direct_deploy):
+        """A leader response cannot attribute the requested capture elsewhere."""
+        url = "https://example.org/RequestedPath?item=ABC"
+        body = "reachable body"
+        _mock_url(direct_vm, url, body)
+        contract = direct_deploy(CONTRACT_PATH)
+        contract.capture_or_recapture(url)
+
+        malformed = json.dumps({
+            "digest": sha256_hex(body), "status": "OK", "body_len": len(body),
+            "url": "https://example.org/OtherPath?item=ABC",
+        })
+        assert direct_vm.run_validator(leader_result=malformed) is False
+
+    def test_validator_rejects_leader_url_case_mutation(self, direct_vm, direct_deploy):
+        """Path/query case changes are rejected even when the digest matches."""
+        url = "https://example.org/RequestedPath?item=ABC"
+        body = "reachable body"
+        _mock_url(direct_vm, url, body)
+        contract = direct_deploy(CONTRACT_PATH)
+        contract.capture_or_recapture(url)
+
+        malformed = json.dumps({
+            "digest": sha256_hex(body), "status": "OK", "body_len": len(body),
+            "url": "https://example.org/requestedpath?item=abc",
+        })
+        assert direct_vm.run_validator(leader_result=malformed) is False
+
+    def test_validator_rejects_unreachable_wrong_url(self, direct_vm, direct_deploy):
+        """UNREACHABLE responses must still name the exact requested URL."""
+        url = "https://example.org/unreachable"
+        direct_vm.clear_mocks()
+        contract = direct_deploy(CONTRACT_PATH)
+        contract.capture_or_recapture(url)
+
+        malformed = json.dumps({"digest": "", "status": "UNREACHABLE",
+                                "body_len": 0, "url": "https://example.org/other"})
+        assert direct_vm.run_validator(leader_result=malformed) is False
+
+    def test_validator_rejects_unreachable_non_empty_digest(self, direct_vm, direct_deploy):
+        """UNREACHABLE is valid only with the exact empty digest sentinel."""
+        url = "https://example.org/unreachable-digest"
+        direct_vm.clear_mocks()
+        contract = direct_deploy(CONTRACT_PATH)
+        contract.capture_or_recapture(url)
+
+        malformed = json.dumps({"digest": sha256_hex("unexpected"),
+                                "status": "UNREACHABLE", "body_len": 0, "url": url})
+        assert direct_vm.run_validator(leader_result=malformed) is False
+
+    def test_validator_accepts_valid_unreachable_response(self, direct_vm, direct_deploy):
+        """An exact UNREACHABLE response passes validation and persists safely."""
+        url = "https://example.org/valid-unreachable"
+        direct_vm.clear_mocks()
+        contract = direct_deploy(CONTRACT_PATH)
+        contract.capture_or_recapture(url)
+
+        valid = json.dumps({"digest": "", "status": "UNREACHABLE",
+                            "body_len": 0, "url": url})
+        assert direct_vm.run_validator(leader_result=valid) is True
+        edition = contract.get_edition(url, 0)
+        assert edition["url"] == url
+        assert edition["digest"] == ""
+        assert edition["status"] == "UNREACHABLE"
+
+    def test_reachable_recapture_preserves_every_edition_invariant(self, direct_vm, direct_deploy):
+        """Reachable captures and recaptures retain exact URLs and non-empty digests."""
+        url = "https://example.org/invariant"
+        first, second = "first body", "second body"
+        contract = direct_deploy(CONTRACT_PATH)
+
+        _mock_url(direct_vm, url, first)
+        eid = contract.capture_or_recapture(url)
+        direct_vm.clear_mocks()
+        _mock_url(direct_vm, url, second)
+        contract.capture_or_recapture(url)
+
+        assert contract.edition_count(eid) == 2
+        for index, body in enumerate((first, second)):
+            edition = contract.get_edition(eid, index)
+            assert edition["url"] == url
+            assert edition["status"] == "OK"
+            assert edition["digest"] == sha256_hex(body)
+            assert edition["digest"] != ""
+    def test_validator_rejects_malformed_or_non_object_leader_payload(self, direct_vm, direct_deploy):
+        """Malformed leader calldata must fail validation rather than raise."""
+        url = "https://example.org/malformed"
+        body = "reachable body"
+        _mock_url(direct_vm, url, body)
+        contract = direct_deploy(CONTRACT_PATH)
+        contract.capture_or_recapture(url)
+
+        for payload in ("{not json", "null", "[]", '"OK"', "42"):
+            assert direct_vm.run_validator(leader_result=payload) is False
+
+    def test_validator_rejects_unreachable_nonzero_body_length(self, direct_vm, direct_deploy):
+        """The UNREACHABLE sentinel requires zero body length."""
+        url = "https://example.org/unreachable-length"
+        direct_vm.clear_mocks()
+        contract = direct_deploy(CONTRACT_PATH)
+        contract.capture_or_recapture(url)
+
+        malformed = json.dumps({"digest": "", "status": "UNREACHABLE",
+                                "body_len": 1, "url": url})
+        assert direct_vm.run_validator(leader_result=malformed) is False
 
 
 # ─────────────────────────────────────────────────────────────────────────────

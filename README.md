@@ -13,7 +13,7 @@ A GenLayer Intelligent Contract (MVP) that captures web page evidence as immutab
 
 Each URL maps to one evidence record with a `DynArray` of editions. Editions are **immutable**: recapturing appends a new edition; earlier editions are never mutated. Divergence history persists even if the page later reverts to its original content — it is evidence, not noise.
 
-Every edition records the **exact URL fetched**, so an edition can never be attributed to a different resource than the one retrieved.
+Every edition records the **exact URL requested and fetched**, and the consensus response must echo that exact spelling. A response with a different scheme/host spelling, path/query case, or other URL text is rejected. Reachable editions require a non-empty SHA-256 digest; `UNREACHABLE` editions use the exact empty-string digest sentinel (`""`) and the requested URL. Existing editions are checked before every append, so URL/status/digest invariants hold across the complete history.
 
 ### URL identity (RFC 3986)
 
@@ -44,11 +44,11 @@ Deployed and tested on **GenLayer Studionet** (RPC `https://studio.genlayer.com/
 
 | Suite | Result |
 |---|---|
-| Direct-mode tests (`tests/direct/test_primary_source.py`) | **24 / 24 passed** |
+| Direct-mode tests (`tests/direct/test_primary_source.py`) | **32 / 32 passed** |
 | GenVM lint (`genvm-lint lint contracts/primary_source.py`) | **passed (3 checks)** |
-| Live verification against Studionet deployment `0xFa3C...66Ab8` | **passed** (query-no-slash case distinctness, path-case distinctness, per-edition URL recording, recapture isolation, scheme/host normalization, code byte-identical) |
+| Live verification against Studionet deployment `0xFa3C...66Ab8` | **prior deployed source passed** (not this corrected source) |
 
-The current live deployment is `0xFa3C79Ff45b4049ce0a16b180bD65Fa68CE66Ab8` (commit `c537832`, deploy tx FINALIZED).
+The corrected provenance-invariant source is prepared locally and is **not yet deployed**. The current on-chain deployment remains `0xFa3C79Ff45b4049ce0a16b180bD65Fa68CE66Ab8` (commit `c537832`, deploy tx FINALIZED).
 
 
 ### Deployed contracts (Studionet)
@@ -65,15 +65,9 @@ The current live deployment is `0xFa3C79Ff45b4049ce0a16b180bD65Fa68CE66Ab8` (com
 
 All earlier deployments remain untouched on-chain. Everything is on Studionet only.
 
-### Live test write transactions (against commit `c537832` deployment)
+### Deployment status
 
-- T1 query-no-slash (`https://example.com?q=CASE_XYZ`): FINALIZED exec=SUCCESS
-- T2 no-slash query case distinct (`?q=case_xyz`): FINALIZED exec=SUCCESS, distinct evidence id
-- T3 path case (`/FreshPathABC` vs `/freshpathabc`): FINALIZED exec=SUCCESS, distinct evidence ids
-- T4 per-edition URL (`/PerEditionAAA` / `HTTPS://EXAMPLE.COM/PerEditionAAA`): each edition returns its own fetched URL
-- T5 recapture isolation (`/MergeTestUpper` vs `/mergetestupper`): never merged
-
-See `test_report.json` for the full public-only report (contract address, network, deploy tx, verification, final run 6/6, write tx hashes, evidence IDs, notes, key-disposal statement). It contains **no secrets**.
+The source changes described above are prepared and tested locally but are not yet deployed. The existing Studionet deployments remain untouched. Deployment of this corrected source requires separate explicit approval.
 
 ## Setup (local development)
 
@@ -107,7 +101,7 @@ source .venv/bin/activate
 python -m pytest tests/direct/ -v
 ```
 
-Result: **19 / 19 passed**.
+Result for the corrected source: **32 / 32 passed**.
 
 ### Live tests against Studionet deployment
 
@@ -145,7 +139,7 @@ One-shot Studionet deployment:
 
 - `contracts/primary_source.py` — the deployed GenLayer Intelligent Contract MVP
 - `tests/conftest.py` — direct-mode test helpers (sha256 utility)
-- `tests/direct/test_primary_source.py` — 11 direct-mode tests (11/11 passing)
+- `tests/direct/test_primary_source.py` — 32 direct-mode tests (32/32 passing)
 - `test_deployed.py` — live Studionet test battery (6/6 passing)
 - `test_report.json` — public-only live test report (no secrets)
 - `deploy_studionet.py` — one-shot Studionet deployment script (no secrets)
