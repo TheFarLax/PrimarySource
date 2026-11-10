@@ -46,9 +46,9 @@ Deployed and tested on **GenLayer Studionet** (RPC `https://studio.genlayer.com/
 |---|---|
 | Direct-mode tests (`tests/direct/test_primary_source.py`) | **32 / 32 passed** |
 | GenVM lint (`genvm-lint lint contracts/primary_source.py`) | **passed (3 checks)** |
-| Live verification against Studionet deployment `0xFa3C...66Ab8` | **prior deployed source passed** (not this corrected source) |
+| Live verification against Studionet deployment `0xD646...1fb34` | **passed** (exact requested-URL binding with 64-hex digests, case-distinct spellings stay separate, UNREACHABLE sentinel exact on URL/digest/body_len, UNREACHABLE recapture appends nothing) |
 
-The corrected provenance-invariant source is prepared locally and is **not yet deployed**. The current on-chain deployment remains `0xFa3C79Ff45b4049ce0a16b180bD65Fa68CE66Ab8` (commit `c537832`, deploy tx FINALIZED).
+The current live deployment is `0xD646680fd2fC2654092521CEaEc3eA439f41fb34` (commit `7c9334a`, deploy tx FINALIZED).
 
 
 ### Deployed contracts (Studionet)
@@ -58,16 +58,20 @@ The corrected provenance-invariant source is prepared locally and is **not yet d
 | Original (pre-lint fix) | `0x533792A0Ecff229F89178E34A14FAE2B53c115c5` | — | `0x3e7f397272f9309b1c1dc2dc3347d496dbbad6555b124ce7c1ee9e3064e2f321` | FINALIZED |
 | Lint-clean | `0xC5f3A08f89f9bEEc58322161259A38BD318953B8` | `3d8e81b` | `0x7399888206a7a79fe153c208886e451467d566ebf69d0066acbd5069405e2072` | FINALIZED |
 | URL-identity fix | `0xD033c74019FD4f92e6536577C424d5736f6043bf` | `7d6ee9d` | `0xc04125634a22d5e5edaacafdf066902b1669400f7011e083b2ea524b9661c5fb` | FINALIZED |
-| **URL-identity fix 2 (current)** | `0xFa3C79Ff45b4049ce0a16b180bD65Fa68CE66Ab8` | `c537832` | `0xa18959f6dd607b21abb9ac46f6115c72c05163cd92d6a336a352cfa1f17a97d5` | FINALIZED |
+| URL-identity fix 2 | `0xFa3C79Ff45b4049ce0a16b180bD65Fa68CE66Ab8` | `c537832` | `0xa18959f6dd607b21abb9ac46f6115c72c05163cd92d6a336a352cfa1f17a97d5` | FINALIZED |
+| **Provenance-binding fix (current)** | `0xD646680fd2fC2654092521CEaEc3eA439f41fb34` | `7c9334a` | `0xe302e64c3e0c794bcae8020c918f018722d2a7530181c0a6cd79d733568ae782` | FINALIZED |
 
 - **Network:** Studionet, chain id 61999
-- **Current on-chain code:** byte-identical to `contracts/primary_source.py` at commit `c537832` (sha256 `8cf38393ca90ffdcb6122e35c4cbf8ae6ecc1cc1df1ece3a5ea67adb41a907f0`)
+- **Current on-chain code:** byte-identical to `contracts/primary_source.py` at commit `7c9334a` (sha256 `a72beefdbdcf7abe0084fcc6d0e504ee5704f2eb7065b430953794ecca33629c`)
 
 All earlier deployments remain untouched on-chain. Everything is on Studionet only.
 
-### Deployment status
+### Live test write transactions (against commit `7c9334a` deployment)
 
-The source changes described above are prepared and tested locally but are not yet deployed. The existing Studionet deployments remain untouched. Deployment of this corrected source requires separate explicit approval.
+- Reachable capture (`/BindLiveAAA`): FINALIZED exec=SUCCESS; edition stores the exact requested URL, 64-hex digest, body_len from consensus
+- Case-distinct URLs (`/LiveCaseUP` vs `/livecaseup`): separate records, each with its own exact URL, no cross-attribution
+- UNREACHABLE sentinel (invalid host, new record): exact requested URL, `digest == ""`, `body_len == 0`
+- UNREACHABLE recapture on existing record: FINALIZED with execution error `capture UNREACHABLE; existing editions untouched`; edition count unchanged
 
 ## Setup (local development)
 
